@@ -46,7 +46,30 @@ build-std = ["core", "compiler_builtins"]
 target = "x86_64-kfs-1.json"
 ```
 
-5- The code that print hello_world, see the code on main.rs (might stink your eye but there is ChapGPT comments, no worries)
+5- The code that print hello_world, see the code on main.rs (might stink your eye but there is ChapGPT comments, no worries). EDIT: i change the code in main.rs so here is the code:
+```rust
+// Writing directly in VGA buffer "Hello, World!"
+// 'b' prefix = byte string, every character mean an ASCII character
+static HELLO: &[u8] = b"Hello, World!";
+
+#[no_mangle]
+pub extern "C" fn _start() -> ! {
+    // 0xb8000 : adress of VGA buffer, espace mem dedie au display text sur system x_86
+    // *mut u8 : mutable pointer to an byte (octet)
+    let vga_buffer = 0xb8000 as *mut u8;
+
+    // enumerate() give index i and a reference to byte for every character
+    for (i, &byte) in HELLO.iter().enumerate() {
+        // unsecure access to the memory
+        unsafe {
+            *vga_buffer.offset(i as isize * 2) = byte;
+            *vga_buffer.offset(i as isize * 2 + 1) = 0xb;
+        }
+    }
+
+    loop {}
+}
+```
 
 6 - Creating a bootimage : 
 - `cargo add bootloader@0.9`
@@ -56,7 +79,7 @@ target = "x86_64-kfs-1.json"
 au moment de l'installation du bootloader, supprimer le fichier config.toml du .cargo puis reecrire ce fichier apres avoir executer la cmd : 
 - `cargo install bootimage`
 - `cargo bootimage`
--  
+
 
 ```toml
 [unstable]
