@@ -93,3 +93,19 @@ target = "x86_64-kfs-1.json"
 runner = "bootimage runner"
 ```
 
+### VGA buffer
+
+1- Representing color using c-Like Enum, add TextBuffer as struct where we define the buffer height and width. Volatile dependencies tells the compiler that the write has side effects and should not be optimized away (cuz Rust compiler always try to optimize).
+
+2- en francais pcq un peu complique. Ensuite, creation d'une struct Writer qui sera la structure fonctionnelle d'ecriture sur le buffer. La macro lazy static permet d'init des variables statique, et elles sont statiques seulement lorsqu'elles y accedent pour la premiere fois. 
+`static ref` est une ref statique immuable mais le contenu peut etre mutable grace au Mutex. Mutex<Writer> est une structure de synchronisation qui assure que seul un thread peut acceder a la ressource partagee. Ca garantit l'acces sur au Writer dans un env multitache ou multithread. 
+
+3- println function using macro_rules!
+
+4- Panic functions
+
+### Testing
+
+1- we split the cargo run as the result we should have during the project AND cargo test as every functionalities we should test.
+
+2- integration test
