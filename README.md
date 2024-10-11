@@ -5,93 +5,50 @@
 - `rustup show`
 
 
-## Rust Binary
-1- Creating our own operating system is to create a Rust executable that does not link the std library. So `cargo new <name> --bin` cuz we want to create an exe instead of a library. We disable in our main.rs the std by adding `#![no_std]`.
+## Explanation of how it load 
 
-2- If we compile now, the compiler require 'panic handler' and 'eh_personality'.
-    - `panic` macro take action when an array past the end for example
-    - `eh_personality` item is used for implementing stack unwinding : permet de prevenir les leaks.
+- Démarrage du système:
 
-in cargo.toml we will abort panic :
+    - Lorsqu'un ordinateur est allumé, le firmware (BIOS ou UEFI) est exécuté. Ce code est stocké dans la ROM de la carte mère.
+    - Le firmware effectue un auto-test au démarrage, détecte la RAM disponible et initialise le CPU et le matériel.
 
-```toml
-[profile.dev]
-panic = "abort"
+- Recherche d'un disque amorçable:
 
-[profile.release]
-panic = "abort"
-```
-3- Overwriting the entrypoint by putting : #![no_main]
+    - Après l'initialisation, le firmware cherche un disque amorçable (comme un disque dur, une clé USB, etc.).
+    - Si un disque amorçable est trouvé, le contrôle est transféré au bootloader, qui est une portion de code exécutable de 512 octets au début du disque.
 
-4- #[no_mangle] without this attribute, Rust compiler attribute a unique name generated like '_Wuoihg548_huge', instead we ensure that Rust compiler really outputs a function with the name _start.
+- Bootloader: 
 
-5- Avoid linker pb with the following cmd : `cargo rustc -- -C link-arg=nostartfiles 
-it tell the linker that it should not link the C startup routine.
+    - Le bootloader détermine l'emplacement de l'image du kernel sur le disque et la charge en mémoire
+    - Le bootloader doit également changer le mode du CPU de mode réel 16 bits à mode protégé 32 bits, puis à mode long 64 bits. Cela permet d'accéder aux registres 64 bits et à l'ensemble de la mémoire principale.
 
-## Minimal Kernel
-1- When you turn on a computer, it begins executing firmware code that is stored in motherboard ROM. This code performs a power-on self-test, detects available RAM, and pre-initializes the CPU and hardware. Afterwards, it looks for a bootable disk and starts booting the operating system kernel. On x86, there are two firmware standards: the “Basic Input/Output System“ (BIOS) and the newer “Unified Extensible Firmware Interface” (UEFI). 
+- Multiboot : 
 
-2- We create a Disk Image that prints Hello World!. For that we need `nightly compiler` and not the stable or the beta cuz we need some experimental features.
+    - Ce standard définit une interface entre le bootloader et le système d'exploitation, permettant à n'importe quel bootloader conforme au Multiboot de charger n'importe quel système d'exploitation conforme.
+    - Pour rendre un kernel conforme au Multiboot, il suffit d'insérer un header Multiboot au début du fichier du kernel. Cela simplifie le démarrage d'un système d'exploitation à partir de GRUB (GNU Grand Unified Bootloader), qui est le bootloader le plus populaire pour les systèmes Linux.
 
-3- x86_64-kfs-1.json file : Defining our own architecture, our own target system
+## Explanation of the Makefile
 
-4- Config i've made ON my computer not on the code 
-- .cargo/config.toml created
-```toml
-[unstable]
-build-std-features = ["compiler-builtins-mem"]
-build-std = ["core", "compiler_builtins"]
+Compilation of OS in Rust, with an x86 arch, a linker and iso image bootable with GRUB. 
 
-[build]
-target = "x86_64-kfs-1.json"
-```
+- `-Z build-std=core,alloc` : building with specific librairies, cuz we dont have the entire librairie from Rust (std) only core and alloc, which is common for bare-metal OS.
 
-5- The code that print hello_world, see the code on main.rs (might stink your eye but there is ChapGPT comments, no worries). EDIT: i change the code in main.rs so here is the code:
-```rust
-// Writing directly in VGA buffer "Hello, World!"
-// 'b' prefix = byte string, every character mean an ASCII character
-static HELLO: &[u8] = b"Hello, World!";
+- `--target=i386.json` : Our target is an architecture i386 (32bits) : defined model of the CPU, every informations linked to x86 arch.
 
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
-    // 0xb8000 : adress of VGA buffer, espace mem dedie au display text sur system x_86
-    // *mut u8 : mutable pointer to an byte (octet)
-    let vga_buffer = 0xb8000 as *mut u8;
+- `--release`: optimisation activated.
 
-    // enumerate() give index i and a reference to byte for every character
-    for (i, &byte) in HELLO.iter().enumerate() {
-        // unsecure access to the memory
-        unsafe {
-            *vga_buffer.offset(i as isize * 2) = byte;
-            *vga_buffer.offset(i as isize * 2 + 1) = 0xb;
-        }
-    }
+[...]
 
-    loop {}
-}
-```
+## BOOTLOADER
 
-6 - Creating a bootimage : 
-- `cargo add bootloader@0.9`
-- `rustup component add llvm-tools-preview`
+1- boot.asm : bootloader file (follow comments on the file)
 
-### WARNING
-au moment de l'installation du bootloader, supprimer le fichier config.toml du .cargo puis reecrire ce fichier apres avoir executer la cmd : 
-- `cargo install bootimage`
-- `cargo bootimage`
+2- main.rs : routine with main.rs
+    - printing
+3- linker.ld : link routine (link object files into the final kernel) with boot.asm.
+    - it defines memory layout for your kernel and establishes how different sections of the asm code will be organized in memory.
+4- grub.cfg: indiquer a grub le binaire, notre image
 
-
-```toml
-[unstable]
-build-std-features = ["compiler-builtins-mem"]
-build-std = ["core", "compiler_builtins"]
-
-[build]
-target = "x86_64-kfs-1.json"
-
-[target.'cfg(target_os = "none")']
-runner = "bootimage runner"
-```
 
 ### VGA buffer
 
@@ -103,9 +60,3 @@ runner = "bootimage runner"
 3- println function using macro_rules!
 
 4- Panic functions
-
-### Testing
-
-1- we split the cargo run as the result we should have during the project AND cargo test as every functionalities we should test.
-
-2- integration test
